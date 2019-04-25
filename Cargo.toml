@@ -6,7 +6,7 @@ edition = "2018"
 description = "Core library to power dashpipe stream processing"
 repository = "https://github.com/dashpipe/dashpipe-core"
 readme = "README.md"
-keywords = ["traffic", "traffic management", "streaming", "stream processing"]
+keywords = ["traffic", "observsability", "streaming"]
 categories = ["streaming"]
 license = "Apache-2.0"
 
