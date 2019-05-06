@@ -5,6 +5,7 @@ use futures::{Stream, Sink, Future};
 use futures::sync::mpsc::channel;
 
 use crate::InputChannel;
+use crate::error::DashPipeError;
 
 pub struct StdinInput{
 
@@ -17,8 +18,8 @@ impl StdinInput{
 }
 
 impl InputChannel for StdinInput{
-    fn start(&self) -> Box<Stream<Item=String, Error = io::Error>>{
-        Box::new(stdin())
+    fn start(&self) -> Result<Box<Stream<Item=String, Error = io::Error>>, DashPipeError>{
+        Ok(Box::new(stdin()))
     }
 }
 

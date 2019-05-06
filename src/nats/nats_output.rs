@@ -1,7 +1,9 @@
 use crate::OutputChannel;
+use crate::error::*;
 
 use super::{RUNTIME};
 
+use log::{error};
 use nitox::{commands::*, NatsClient};
 use futures::{prelude::*, future};
 
@@ -11,20 +13,24 @@ pub struct NatsOutput {
 }
 
 impl NatsOutput {
-    pub fn new(cluster_uri: &str, a_subject: String) -> NatsOutput {
+    pub fn new(cluster_uri: &str, a_subject: String) -> Result<NatsOutput, DashPipeError> {
         let nats_client_builder = super::connect_to_nats(cluster_uri);
-        //we need to run the connection inside the tokio runtime
-        let nats_client: NatsClient = match RUNTIME.lock().unwrap().block_on(nats_client_builder){
-            Ok(c) => c,
-            Err(e) => {
-                        println!("Unable to connect to NATS: {}", e);
-                        panic!(e)
+
+        let ret: Result<NatsOutput, DashPipeError> = match RUNTIME.lock().unwrap().block_on(nats_client_builder){
+            Ok(nats_client) => {
+                let output = NatsOutput{
+                                subject: a_subject.to_owned(),
+                                nats_client: nats_client,
+                            };
+                Ok(output)
             },
+            Err(nats_error) => {
+                let disp = format!("Unable to initialize NATs {}", nats_error);
+                error!("Unable to initialize NATs {}", nats_error);
+                Err(DashPipeError::InitializeError(disp))
+            }
         };
-        NatsOutput{
-            subject: a_subject.to_owned(),
-            nats_client: nats_client,
-        }
+        ret
     }
 }
 
