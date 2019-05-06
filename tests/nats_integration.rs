@@ -19,7 +19,7 @@ fn test_send_message(){
                     .with_wait_for(WaitFor::message_on_stderr("Listening for client connections"));
     let node = docker.run(nats_image);
     let cluster_uri = format!("localhost:{}", node.get_host_port(4222).unwrap());
-    let output = NatsOutput::new(&cluster_uri, "testsubject".to_string());
+    let output = NatsOutput::new(&cluster_uri, "testsubject".to_string()).expect("Unable to initialize NATS");
 
     let connect_cmd = ConnectCommand::builder().build().unwrap();
     let options = NatsClientOptions::builder()
@@ -64,7 +64,7 @@ fn test_receive_messages(){
     let node = docker.run(nats_image);
     let cluster_uri = format!("localhost:{}", node.get_host_port(4222).unwrap());
 
-    let input = NatsInput::new(&cluster_uri, "receivedata".to_string(), None);
+    let input = NatsInput::new(&cluster_uri, "receivedata".to_string(), None).expect("Unable to start NATS");
 
     let connect_cmd = ConnectCommand::builder().build().unwrap();
     let options = NatsClientOptions::builder()
