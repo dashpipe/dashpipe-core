@@ -64,7 +64,7 @@ fn test_receive_messages(){
     let node = docker.run(nats_image);
     let cluster_uri = format!("localhost:{}", node.get_host_port(4222).unwrap());
 
-    let input = NatsInput::new(&cluster_uri, "receivedata".to_string(), None).expect("Unable to start NATS");
+    let input : NatsInput = NatsInput::new(&cluster_uri, "receivedata".to_string(), None).expect("Unable to start NATS");
 
     let connect_cmd = ConnectCommand::builder().build().unwrap();
     let options = NatsClientOptions::builder()
@@ -88,7 +88,7 @@ fn test_receive_messages(){
     runtime.spawn(fut.or_else(|_|{Ok(())}));
 
     let mut messages: Vec<String> = Vec::new();
-    let _ = input.start()
+    let _ = input.start().expect("Unable to start stream")
        .take(5)
        .for_each(|m| { 
            let _ = messages.push(m); 
