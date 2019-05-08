@@ -9,6 +9,7 @@ use futures::{
 };
 use nitox::{commands::*, NatsClient};
 use std::io;
+use prometheus::{Counter};
 
 pub struct NatsInput {
     subject: String,
@@ -40,6 +41,29 @@ impl NatsInput {
 
 impl InputChannel for NatsInput {
     fn start(&self) -> Result<Box<Stream<Item=String, Error = io::Error>>, DashPipeError> {
+         let group_tag = match self.queue_group.clone(){
+            Some(s) => s.to_owned(),
+            None => "None".to_owned(),
+        };
+        
+        let msg_recv_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages",
+        "Total number of messages received",
+        labels! {"channel" => "nats", "subject" => &self.subject, "queue_group" => &group_tag, }))
+        .unwrap();
+
+        let receive_err_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages_error",
+        "Total number of errors while receiving messages",
+        labels! {"channel" => "nats", "subject" => &self.subject, "queue_group" => &group_tag, }))
+        .unwrap();
+
+        let parse_err_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages_parse_error",
+        "Total number of errors while parsing received messages",
+        labels! {"channel" => "nats", "subject" => &self.subject, "queue_group" => &group_tag, }))
+        .unwrap();
+
         let sub_cmd: SubCommand = SubCommand::builder()
             .subject(self.subject.to_owned())
             .queue_group(match &self.queue_group{
@@ -58,16 +82,23 @@ impl InputChannel for NatsInput {
                 },
         };
 
-        let ret = receiver.map_err(|_| { io::Error::from(io::ErrorKind::Other)})
+        let ret = receiver.map_err(move |_| {
+            receive_err_counter.inc();
+            io::Error::from(io::ErrorKind::Other)})
         .map(
-            |msg: Message| { 
+            move |msg: Message| { 
+                msg_recv_counter.inc();
                 let slice = msg.payload.slice_from(0);
                 String::from_utf8(slice.to_vec())
             })
-        .filter_map(|res| {
+        .filter_map(move |res| {
             match res{
                 Ok(s) => Some(s),
-                Err(_) => None,
+                Err(_) => {
+                    parse_err_counter.inc();
+                    error!("Unable to parse incoming message as a string, skipping");
+                    None
+                    }
             }
         });
 

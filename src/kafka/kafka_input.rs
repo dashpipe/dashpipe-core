@@ -12,7 +12,8 @@ use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::Message;
-use log::{warn, info};
+use log::{warn, info, debug};
+use prometheus::{IntCounter};
 
 use crate::InputChannel;
 use crate::error::DashPipeError;
@@ -44,24 +45,51 @@ impl InputChannel for KafkaInput{
             Err(e) => return Err(DashPipeError::InitializeError("Unable to initialize Kakfa".to_string())),
         }
 
-        Ok(Box::new(receive_messages_fn(sconsumer)))
+        Ok(Box::new(receive_messages_fn(sconsumer, &self.topics)))
     }
 }
 
-fn receive_messages_fn(sconsumer: StreamConsumer) -> impl Stream<Item=String, Error=io::Error> {
+fn receive_messages_fn(sconsumer: StreamConsumer, topic: &str) -> impl Stream<Item=String, Error=io::Error> {
+    let msg_recv_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages",
+        "Total number of messages received",
+        labels! {"channel" => "kafka", "subject" => topic, }))
+        .unwrap();
+
+        let receive_err_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages_error",
+        "Total number of errors while receiving messages",
+        labels! {"channel" => "nats", "subject" => topic, }))
+        .unwrap();
+
+        let parse_err_counter = register_int_counter!(opts!(
+        "dashpipe_received_messages_parse_error",
+        "Total number of errors while parsing received messages",
+        labels! {"channel" => "nats", "subject" => topic, }))
+        .unwrap();
     let (mut sender, receiver) = channel(1000);
     thread::spawn(move || {
         let message_stream = sconsumer.start();
         for message in message_stream.wait() {
             match message{
-                Err(_) => warn!("Error while reading from stream."),
-                Ok(Err(e)) => warn!("Kafka error: {}", e),
+                Err(_) => {
+                        receive_err_counter.inc();
+                        warn!("Error while reading from stream.");
+                    },
+                Ok(Err(e)) => {
+                        receive_err_counter.inc();
+                        warn!("Kafka error: {}", e);
+                    },
                 Ok(Ok(m)) => {
-                    info!("Got a beautiful message!!");
+                    debug!("Got a beautiful message!!");
+                    msg_recv_counter.inc();
                     let payload = match m.payload_view::<str>() {
                         None => Err(Error::new(ErrorKind::InvalidData, "error")),
                         Some(Ok(s)) => Ok(s.to_string()),
-                        Some(Err(_)) => Err(Error::new(ErrorKind::InvalidData, "error")),
+                        Some(Err(_)) => {
+                            parse_err_counter.inc();
+                            Err(Error::new(ErrorKind::InvalidData, "error"))
+                        },
                     };
                     match sender.send(payload).wait(){
                         Ok(s) => sender = s,

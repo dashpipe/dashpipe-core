@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate prometheus;
 extern crate rdkafka;
 extern crate log;
 extern crate nitox;

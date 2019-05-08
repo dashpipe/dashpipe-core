@@ -6,11 +6,13 @@ use futures::{
     Stream,
     sync::{oneshot},
 };
+use std::collections::HashMap;
 use dashpipe::{OutputChannel, InputChannel, NatsInput, NatsOutput};
 use testcontainers::*;
 use testcontainers::images::generic::{GenericImage, WaitFor};
 use nitox::commands::{ConnectCommand, SubCommand, PubCommand};
 use nitox::{NatsClient, NatsError, NatsClientOptions};
+use prometheus::proto::MetricFamily;
 
 #[test]
 fn test_send_message(){
@@ -50,10 +52,21 @@ fn test_send_message(){
     runtime.spawn(fut.then(|r| tx.send(r).map_err(|e| panic!("Cannot send Result {:?}", e))));
     let connection_result = rx.wait().expect("Cannot wait for a result");
     let _ = runtime.shutdown_now().wait();
-    assert!(connection_result.is_ok());
     let msg = connection_result.unwrap();
     assert_eq!(msg.payload, "hello world");
+    docker.stop(node.id());
     docker.rm(node.id());
+    let families = prometheus::gather();
+    assert_ne!(0, families.len());
+    let mut worked: HashMap<String, bool> = HashMap::new();
+    for family in &families{
+        match family.get_name(){
+            "dashpipe_sent_messages" => {worked.insert("dashpipe_sent_messages".to_string(), true);},
+            "dashpipe_sent_messages_error" => {worked.insert("dashpipe_sent_messages_error".to_string(), true);},
+            _ => {},
+        }
+    }
+    assert_eq!(worked.len(), 2);
 }
 
 #[test]
@@ -101,5 +114,6 @@ fn test_receive_messages(){
         None => false,
     };
     assert!(worked);
+    docker.stop(node.id());
     docker.rm(node.id());
 }
