@@ -50,22 +50,22 @@ impl InputChannel for KafkaInput{
 }
 
 fn receive_messages_fn(sconsumer: StreamConsumer, topic: &str) -> impl Stream<Item=String, Error=io::Error> {
-    let msg_recv_counter = register_int_counter!(opts!(
+    let msg_recv_counter = register_counter!(opts!(
         "dashpipe_received_messages",
         "Total number of messages received",
         labels! {"channel" => "kafka", "subject" => topic, }))
         .unwrap();
 
-        let receive_err_counter = register_int_counter!(opts!(
+        let receive_err_counter = register_counter!(opts!(
         "dashpipe_received_messages_error",
         "Total number of errors while receiving messages",
-        labels! {"channel" => "nats", "subject" => topic, }))
+        labels! {"channel" => "kafka", "subject" => topic, }))
         .unwrap();
 
-        let parse_err_counter = register_int_counter!(opts!(
+        let parse_err_counter = register_counter!(opts!(
         "dashpipe_received_messages_parse_error",
         "Total number of errors while parsing received messages",
-        labels! {"channel" => "nats", "subject" => topic, }))
+        labels! {"channel" => "kafka", "subject" => topic, }))
         .unwrap();
     let (mut sender, receiver) = channel(1000);
     thread::spawn(move || {
